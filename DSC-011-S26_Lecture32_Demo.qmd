@@ -1,0 +1,352 @@
+---
+title: "DSC 011 S26 — Lecture 32 Demo"
+subtitle: "UNIX Text Utilities, III, Compiling"
+author: "FirstName LastName"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 4
+    code-fold: false
+    theme: cosmo
+    number-sections: true
+    embed-resources: true
+    include-in-header:
+      text: |
+        <style>
+        kbd {
+          display: inline-block;
+          padding: 2px 6px;
+          font-size: 0.85em;
+          font-family: monospace;
+          background-color: #f5f5f5;
+          border: 1px solid #ccc;
+          border-bottom: 2px solid #aaa;
+          border-radius: 3px;
+        }
+        </style>
+execute:
+  echo: true
+  warning: false
+  message: false
+  error: true
+urlcolor: blue
+linkcolor: blue
+engine: knitr
+---
+
+```{r setup, include=FALSE, cache=FALSE, message=FALSE, warning=FALSE, results='hide'}
+options(digits = 5)
+knitr::opts_chunk$set(
+  echo     = TRUE,
+  cache    = FALSE,
+  warning  = FALSE,
+  message  = FALSE,
+  collapse = FALSE,
+  comment  = "",
+  error    = TRUE    # never halt rendering on bash exit code 1
+)
+
+# ── Unset stale virtual environment from other projects ───────────────────────
+Sys.unsetenv("VIRTUAL_ENV")
+
+# ── Fix PATH for bash chunks on macOS (safe no-op on Linux/WSL2) ─────────────
+# RStudio launched from the Dock inherits a minimal launchd PATH that omits
+# /opt/homebrew/bin. This prepends Homebrew paths so knitr bash chunks see
+# bash 5 and system tools like check_bash.
+homebrew_paths <- c("/opt/homebrew/bin")
+existing <- homebrew_paths[dir.exists(homebrew_paths)]
+if (length(existing) > 0) {
+  old_path <- Sys.getenv("PATH")
+  new_path <- paste(c(existing, old_path), collapse = ":")
+  Sys.setenv(PATH = new_path)
+}
+```
+
+---
+
+## Preliminaries
+
+### Instructions for This Notebook
+
+Follow instructor demo, render and submit at the end of lecture.
+
+::: {.callout-tip}
+### Command-line habits for this class
+
+- **Tab-complete** directory and file names in the terminal. If nothing
+  completes, you have a typo or are in the wrong directory.
+- **Copy-paste** paths from this notebook rather than typing them.
+  WSL2 Windows Terminal: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> /
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>.
+  macOS: <kbd>Cmd</kbd>+<kbd>C</kbd> / <kbd>Cmd</kbd>+<kbd>V</kbd>.
+- **Develop in the terminal, memorialize in the notebook.** Write and test
+  commands in your shell first. Once they work, paste them into the chunk.
+- **Read errors before asking for help** — they almost always name the
+  problem exactly.
+- **In UNIX, silence is golden.** No output + exit code 0 = success.
+:::
+
+::: {.callout-note}
+### Role Responsibilities
+
+- **All Team Members** work individually to follow and reproduce the demo.
+- **All Team Members** signal the Reporter or Scrum Master when blocked.
+- **Scrum Master** leads the stand-up (~2 min), timeboxes work, signals
+  instructor when team is ready or needs help.
+- **Reporter** records blockages and resolutions in the log tables below,
+  and summarizes the retrospective at the end.
+- **Developers** test and troubleshoot, help blocked teammates.
+:::
+
+---
+
+## Initial Steps Check and Render Guard
+
+This chunk runs on every render. It never halts rendering — instead it
+prints `✓` or `✗ INCORRECT` with a clear fix message for each check.
+Read it carefully before proceeding with any step.
+
+```{bash render-guard, error=TRUE}
+echo "=== Render Guard ==="
+echo ""
+
+# ── 1. Working directory ──────────────────────────────────────────────────────
+EXPECTED="$HOME/DSC-011-Sp26/DSC-011-S26_Lecture31_Demo_UNIX_Text_Utilities_II"
+ACTUAL=$(pwd)
+if [[ "$ACTUAL" == "$EXPECTED" ]]; then
+    echo "✓ Working directory: $ACTUAL"
+else
+    echo "✗ INCORRECT — Wrong working directory"
+    echo "  Rendering from: $ACTUAL"
+    echo "  Expected:       $EXPECTED"
+    echo "  Fix:"
+    echo "    1. Close this project (File → Close Project)"
+    echo "    2. Change directory to ~/DSC-011-Sp26/"    
+    echo "    3. git clone <demo-URL>" 
+    echo "    4. Open ~/DSC-011-Sp26/DSC-011-S26_Lecture31_Demo_UNIX_Text_Utilities_II/DSC-011-S26_Lecture31_Demo_UNIX_Text_Utilities_II.Rproj"
+    echo "    5. Re-render"
+fi
+
+echo ""
+
+# ── 2. bash version ───────────────────────────────────────────────────────────
+BASH_MAJOR="${BASH_VERSINFO[0]}"
+BASH_MINOR="${BASH_VERSINFO[1]}"
+if [[ "$BASH_MAJOR" -gt 5 ]] || \
+   { [[ "$BASH_MAJOR" -eq 5 ]] && [[ "$BASH_MINOR" -ge 1 ]]; }; then
+    echo "✓ bash $BASH_VERSION at $(which bash)"
+else
+    echo "✗ INCORRECT — bash $BASH_VERSION is too old (need 5.1+)"
+    echo "  macOS fix:"
+    echo "    brew install bash"
+    echo "    echo /opt/homebrew/bin | sudo tee /etc/paths.d/homebrew"
+    echo "    Quit RStudio fully; relaunch: open -a RStudio"
+    echo "  WSL2 fix:"
+    echo "    sudo apt update && sudo apt install --only-upgrade bash"
+fi
+
+echo ""
+
+# ── 3. check_bash ─────────────────────────────────────────────────────────────
+if command -v check_bash &>/dev/null; then
+    echo "✓ $(check_bash --version) at $(which check_bash)"
+else
+    echo "✗ INCORRECT — check_bash not found on PATH"
+    echo "  Fix: complete Step 3 (clone repo, just install-system)"
+    echo "  then re-render."
+fi
+
+echo ""
+
+# ── 4. git available ──────────────────────────────────────────────────────────
+if command -v git &>/dev/null; then
+    echo "✓ $(git --version)"
+else
+    echo "✗ INCORRECT — git not found"
+    echo "  macOS: brew install git"
+    echo "  WSL2:  sudo apt install git"
+fi
+
+echo ""
+echo "=== End Render Guard ==="
+```
+
+---
+
+# LECTURE 30 DEMO: UNIX Text Utilities
+
+## `grep`: Print all lines containing "ch", "Ch", "cH", or "CH" in the text file `data/processed/names2000s.txt` containing data on top baby names of the 2000s.
+
+```{bash grep1, error=TRUE}
+MY_CODE='grep -i ch data/processed/names2000s.txt'
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires grep     \
+             --requires-flag -i  \
+             "544a26a357cb29a63612d11edfd13307ba5f049455007ed538c0b6295e9661e8"
+```
+
+## `cut -c`: Print characters of all lines from 5-15 and 25 in the text file `data/processed/names2000s.txt` containing data on top baby names of the 2000s.
+
+```{bash cut1, error=TRUE}
+MY_CODE='cut -c 5-15,25- data/processed/names2000s.txt'
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires cut      \
+             --requires-flag -c  \
+             "62f4e4064bc52b0037f9a505600232214a5ab691cb3bdf3d26a87916f16f83ab"
+
+```
+
+## `cut -f`: Print fields 1,2 and 4 of every line using pipes (`|`) as delimiters in the text file `data/processed/names2000s.txt` containing data on top baby names of the 2000s.
+
+```{bash cut2, error=TRUE}
+MY_CODE='cut -d\| -f1,2,4 data/processed/names2000s.txt'
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires cut      \
+             --requires-flag -f  \
+             --requires-flag -d  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+```
+
+
+## Shell Globs
+
+Write a shell-glob to exactly match the files `data/processed/names1900s.txt`,`data/processed/names1910s.txt`,`data/processed/names2000s.txt`, and `data/processed/names2010s.txt` but no other of the processed data files. 
+
+```{bash glob, error=TRUE}
+
+MY_CODE=''
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires ls      \
+             --requires-flag -1  \
+             "c0b7f82de96d3eb694e5c74dd93df7eb33e7b3d2e290e661d26ee32263b55308"
+
+```
+
+
+## Pipe and Filter Programming with `grep`
+
+Write a shell-glob to **match all lines in any of the processed data across all 14 decades** that contain both a "z" and a "y" of either case.
+
+
+```{bash pipe, error=TRUE}
+MY_CODE=''
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires grep     \
+             --requires grep     \
+             --requires-flag -i  \
+             "243f00b955294c6871e45191880d3a8553ca56101a7f631aa144062773a41cb5"
+
+```
+
+### Answer These Questions:
+
+1. Does this command pipeline match **names** containing **both** a "z" or "y" of any case, or **lines** containing **both** a "z" or "y" of any case, **or neither?** **Answer below in line 221** by deleting two of three of the following: **names lines neither**
+
+**YOUR ANSWER: names lines neither**
+
+2. Which two names in the output contain both a "z" and a "y"? 
+
+**YOUR ANSWER: **
+
+## Scrubbing Data to tab-separated values (TSV). 
+
+Memorialize the pipeline that matches the line containing "Michael" but not "Michaela" in the 1990s data textfile and scrubs it to **tab-separated values format.**
+
+```{bash scrub, error=TRUE}
+MY_CODE=''
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires grep     \
+             --requires tr       \
+             --requires tr       \
+             "9da95e3fb15392a788f2dae4721c76fc867a4b5dd7c6093d161e2db8dbb83432"
+
+```
+
+## Extracting fields based on values in other fieldsl; finding unique and duplicated lines with `uniq` 
+
+Which unique girls names had the same rank as "Michael" in any decade?
+
+```{bash uniq, error=TRUE}
+MY_CODE=''
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires grep     \
+             --requires cut       \
+             --requires tr       \
+             --requires sort       \
+             --requires uniq       \
+             "c737a32661e8dd70fb5b9cf5a1105133e28688909dca7912c7e8551878ce6027"
+
+```
+
+## Interactive Data Science in the UNIX Shell
+
+Use `w3m` to interactively convert all of the raw HTML files with a shell glob, select datalines with `grep` and then use `tr`, `cut`, `sort` and `uniq` to answer: How many unique boys and girls names over all decades appear in the data? 
+
+```{bash count-unique-names, error=TRUE}
+MY_CODE=''
+eval "$MY_CODE" | 
+  check_bash --code "$MY_CODE"   \
+             --requires w3m      \
+             --requires grep     \
+             --requires tr       \
+             --requires tr       \
+             --requires tr       \
+             --requires tr       \
+             --requires cut       \
+             --requires sort       \
+             --requires uniq       \
+             --requires wc       \
+             "9f150d56c8111d8236a69a2cfa52cc546964375087648bfb46cf2d5eb8625ec8"
+
+```
+
+2. In your terminal, build-out test and run each successive step in the pipeline from Jeroen Jannsons *Data Science at the Command Line* demonstrated in lecture and shown in the lecture slides, that streams the text of *Alice's Adventures in Wonderland*, converts all words to lower-case, matches and prints every word on a new line,  sorts the words ASCIIbetically (so duplicate lines are findable by `uniq`), counts the frequency of each word, sorts the words inversely by their frequency and prints the top 10 words
+
+
+. 
+
+```{bash coutnt-all-names, error=TRUE}
+code=$()
+check_bash "$code" "daae24db8bee2aaf3c4f0422311d887d1221aef0bd11b0068fb4a977d8381b0a"
+
+
+```
+
+---
+
+## Reporter's Mini-Retrospective Summary
+
+**What helped the team succeed today:**
+
+*(write here)*
+
+**What could make the next session run better:**
+
+*(write here)*
+
+---
+
+::: {.callout-important}
+## ★ LECTURE 31 DEMO 
+
+**Render this notebook and submit the HTML to CatCourses.**
+Before submitting, confirm:
+
+- [ ] Your name is in the `author:` field
+- [ ] All steps show `✓ CORRECT` 
+
+Partial credit is awarded for notebooks with some `✗ INCORRECT` outputs.
+:::
+
+---
+
+```{r session-info, echo=FALSE}
+sessionInfo()
+```

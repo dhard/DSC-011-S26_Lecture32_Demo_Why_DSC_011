@@ -1,0 +1,1382 @@
+---
+title: "Why DSC 011: Reproducible Polyglot Computing for Ethical and Effective Data Science Communication"
+author: "David H. Ardell"
+date: today
+bibliography: references.bib
+csl: https://www.zotero.org/styles/apa
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    toc-title: "Diagrams"
+    embed-resources: true
+    theme: cosmo
+    fig-align: center
+    number-sections: true
+    mermaid:
+      theme: neutral
+execute:
+  echo: false
+  warning: false
+---
+
+These diagrams support lecture and discussions in DSC 011 on why we learn what we learn in DSC 011: **effective and ethical data science requires reproducible computing through complete computable descriptions** of the entire data science stack, from hardware to deliverables. 
+
+Render this notebook with:
+
+```bash
+quarto render DSC011_Lecture32_Lecture_Notes_Why_DSC011.qmd
+```
+
+No R or Python packages are required to render this notebook.  
+
+All diagrams use Quarto's built-in `mermaid` and `dot` (Graphviz) engines, plus one `{=html}` block for the
+interactive von Neumann stepper. This is an example of **reproducible authoring**: with this notebook I am communicating to you not only course content diagrams but **descriptions of how I made those diagrams.** Not only can you use these examples to make your own diagrams in Quarto and Jupyter notebooks but it **memorializes how these diagrams were exactly made,** which **makes it easier for you or me to adapt and modify them** to new uses and **avoids errors and inconsistencies.**  
+
+---
+
+## The Chomsky hierarchy
+
+The **Chomsky hierarchy** classifies **formal languages** (mathematical models of human and computer languages that equivalently specify infinite sets of strings that belong to a given defined language or not) into four nested
+classes, each recognisable by a progressively more powerful machine
+[@chomsky1956; @hopcroft2006]. It establishes the theoretical landscape
+before introducing **FSMs: finite state machines** is exactly the recogniser
+for the *most restricted* class — regular languages. The next level adds **stack memory** enabling recursive computation with fixed pre-defined operators (like a calculator) while the ultimate **Universal Turing Machine (UTM)** level adds **Random Access Memory (RAM)** a persistent memory store that allows definition of new **named functions** and **named variables** at run-time.
+
+```{dot}
+//| fig-cap: "Chomsky hierarchy — four nested classes of formal languages and their recognisers"
+//| fig-alt: "Four nested boxes. Outermost: recursively enumerable languages recognised by a Turing machine. Next: context-sensitive languages recognised by a linear bounded automaton. Next: context-free languages recognised by a pushdown automaton. Innermost: regular languages recognised by a finite state machine."
+//| fig-width: 6
+
+digraph chomsky {
+  rankdir = TB
+  node [shape=box style=filled fontname="sans-serif" fontsize=11]
+  edge [style=invis]
+
+  subgraph cluster_re {
+    label="Type 0 — Recursively enumerable\nRecogniser: Turing machine (UTM)\nExample: any computable language"
+    fontname="sans-serif" fontsize=10
+    style=filled fillcolor="#fce7f3" color="#9d174d"
+
+    subgraph cluster_cs {
+      label="Type 1 — Context-sensitive\nRecogniser: linear bounded automaton\nExample: a^n b^n c^n"
+      fontname="sans-serif" fontsize=10
+      style=filled fillcolor="#ede9fe" color="#5b21b6"
+
+      subgraph cluster_cf {
+        label="Type 2 — Context-free\nRecogniser: pushdown automaton\nExample: balanced parentheses  a^n b^n"
+        fontname="sans-serif" fontsize=10
+        style=filled fillcolor="#dbeafe" color="#1d4ed8"
+
+        subgraph cluster_reg {
+          label="Type 3 — Regular\nRecogniser: finite state machine (FSM)\nExample: \\w+@\\w+\\.\\w+  names*.html"
+          fontname="sans-serif" fontsize=10
+          style=filled fillcolor="#d1fae5" color="#065f46"
+          CORE [label="" shape=point style=invis width=0]
+        }
+      }
+    }
+  }
+}
+```
+
+**Why this matters for DSC 011:**
+
+**Regular expressions (the kind used in `grep`, `sed`, `awk`, Perl, R's `stringr`, and Python's `re`) are precisely the regular languages — Type 3.**
+They can be recognised by a finite state machine with no additional memory
+beyond the current state. This is why regex cannot match balanced
+parentheses or count occurrences — those require at least a pushdown automaton
+(Type 2).
+
+Shell globs are a strict *subset* of regular languages — they impose further
+restrictions (no alternation, no quantifiers beyond `*`). A full programming
+language like R or Python is not even context-free — it is closer to
+context-sensitive or recursively enumerable, which is why parsing R requires
+an interpreter (a UTM), not a regex engine [@stuart2013].
+
+Finally, learning the Chomsky Hierarchy connects our previous disussion of **memoryless** and **memoryful** sampling processes, making clear that memoryless processes are limited in what they can compute and which languages (sets of strings) they can recognize. 
+
+::: {.callout-note}
+### Discussion questions
+
+1. Why can a regex not match balanced parentheses like `((a+b)*c)`? Which
+   level of the Chomsky hierarchy is required?
+2. Shell globs sit below Type 3 (regular) in expressive power. What
+   specific features of regular expressions do globs *not* have?
+3. R's parser is more powerful than a regex engine. What does that tell you
+   about the Chomsky class of R's grammar?
+4. The Perl regex engine supports backreferences like `\1`. Does this make
+   Perl regexes strictly more powerful than Type 3? What class do they
+   fall into?
+:::
+
+---
+
+## Shannon's model of communication
+
+Claude Shannon's 1948 paper [@shannon1948] introduced a general model of communication grounded in probability theory called **information theory**. Information theory underlies all modern understanding and conceptual foundation of **communication, data compression, error-correcting codes, cryptography, and the statistical tests we use in data analysis** across every conceivable field of science, engineering and humanities. 
+
+```{mermaid}
+%%| fig-cap: "Shannon (1948) model of communication"
+%%| fig-alt: "Five boxes in a row: information source, transmitter, channel, receiver, destination. A noise source injects into the channel from below."
+
+flowchart LR
+  IS["Information
+  source"]
+  TX["Transmitter
+  encoder"]
+  CH["Channel
+  medium"]
+  RX["Receiver
+  decoder"]
+  DS["Destination"]
+  NS["Noise
+  source"]
+
+  IS -- "message" --> TX
+  TX -- "signal" --> CH
+  CH -- "received signal" --> RX
+  RX -- "message" --> DS
+  NS -. "noise" .-> CH
+
+  style NS fill:#f9ddd5,stroke:#c46045
+```
+
+**Key quantities**
+
+| Symbol | Meaning |
+|--------|---------|
+| $H(X)$ | Entropy of source $X$ — average surprise per symbol |
+| $I(X;Y)$ | Mutual information — how much knowing $Y$ tells us about $X$ |
+| $C$ | Channel capacity — maximum reliable transmission rate |
+
+::: {.callout-note}
+### Discussion questions
+
+1. In a data science context, what plays the role of the *transmitter*?
+   The *channel*? The *noise source*?
+2. How does Shannon entropy relate to the `log2` term in the information
+   content formula from lecture?
+3. How does a shell pipeline `cat data.csv | cut -f2 | sort | uniq -c`
+   map onto this model? What are the possible noise sources?
+4. Why does Shannon's model suggest that **all computation is communication**?
+:::
+
+---
+
+## HTTP request and browser rendering
+
+The diagram below gives a first-exposure view of what happens between a user
+pressing Enter in a browser address bar and a rendered page appearing on
+screen. Each arrow is a communication step in Shannon's sense: a message
+encoded, transmitted through a channel, and decoded by a receiver.
+
+This also is meant to give "under the hood" insight to the network and communication basis of the internet.
+
+```{mermaid}
+%%| fig-cap: "HTTP request/response cycle — overview"
+%%| fig-alt: "Sequence diagram: User types URL, Browser resolves DNS, establishes TCP/TLS, sends HTTP GET, Server responds 200 OK, Browser parses HTML and renders page."
+
+sequenceDiagram
+  actor U as User
+  participant B as Browser
+  participant D as DNS resolver
+  participant S as Web server
+  U->>B: types URL, presses Enter
+  B->>D: resolve hostname → IP address
+  D-->>B: IP address
+  B->>S: TCP connect · TLS handshake
+  B->>S: HTTP GET /path
+  S-->>B: HTTP 200 OK + HTML body
+  B->>B: parse HTML · fetch CSS / JS / images
+  B->>U: render page
+```
+
+Every arrow is a pipe in the pipe-and-filter sense. The browser is a filter
+that decodes the HTTP response; the DNS resolver is a filter that translates
+names to addresses; the web server is a filter that maps URL paths to data.
+The browser itself is a compiled binary — an executable produced from C++ or
+Rust source code — that *interprets* HTML, CSS, and JavaScript as data
+formats, exactly as R interprets `.R` scripts or Python interprets `.py`
+files [@tanenbaum2016].
+
+::: {.callout-note}
+### Discussion questions
+
+1. The browser binary is compiled from C++ or Rust source code. In what
+   sense is the browser itself an *interpreter*? What language does it
+   interpret?
+
+2. Map this diagram onto Shannon's model. What is the *message*? What are
+   the *noise sources* in an HTTP transaction?
+
+3. TLS sits between TCP and HTTP. What problem does it solve in Shannon's
+   terms — is it reducing noise, or something else?
+
+4. A FastAPI server returns JSON rather than HTML. Which steps in the
+   sequence diagram change? Which remain the same?
+:::
+
+---
+
+## The OSEMN model for data science
+
+OSEMN (pronounced *awesome*) is a five-stage pipeline model introduced by
+@mason2010. It is a useful scaffold for identifying what *kind* of work you
+are doing at any moment and which tools belong to which stage.
+
+```{mermaid}
+%%| fig-cap: "OSEMN pipeline with typical tools and a refinement feedback loop"
+%%| fig-alt: "Five colored boxes left to right: Obtain, Scrub, Explore, Model, iNterpret. A dashed arc loops back from iNterpret to Obtain."
+
+flowchart LR
+  O["**Obtain**
+  bash · curl · API
+  wget · SQL"]
+  S["**Scrub**
+  R tidyr · dplyr
+  pandas · Perl"]
+  E["**Explore**
+  ggplot2 · seaborn
+  summary · skimr"]
+  M["**Model**
+  tidymodels · sklearn
+  lm · glm · Stan"]
+  N["**iNterpret**
+  Quarto · Shiny
+  papers · dashboards"]
+
+  O --> S --> E --> M --> N
+  N -.->|"iterate & refine"| O
+
+  style O fill:#dbeafe,stroke:#3b82f6
+  style S fill:#fef9c3,stroke:#ca8a04
+  style E fill:#d1fae5,stroke:#059669
+  style M fill:#ede9fe,stroke:#7c3aed
+  style N fill:#fce7f3,stroke:#db2777
+```
+
+The pipeline is **not purely linear** — findings at the iNterpret stage often
+send you back to Obtain (a missing data source) or Scrub (a coding error).
+This iterative structure mirrors Shannon's feedback channel.
+
+::: {.callout-note}
+### Discussion questions
+
+1. Which stage does `bash` scripting belong to? Which does `ggplot2` belong to?
+2. Map the Baby Names project onto the five stages.
+3. Where does *reproducibility* sit — one stage, or across all of them?
+4. @wilson2017 argue that most of what makes research reproducible happens
+   *before* the Model stage. Do you agree?
+:::
+
+---
+
+## Data science as reproducible pipe-and-filter computation
+
+The **pipe-and-filter** architectural pattern — originating in Unix —
+describes computation as a series of independent *filter* processes connected
+by *pipes* that pass data between them [@garlan1994; @kernighan2019]. Each filter reads from stdin (or a
+file), applies a transformation, and writes to stdout (or a file). No filter
+needs to know the internal structure of its neighbors.
+
+Every serious data science pipeline is a pipe-and-filter system. The diagram
+below shows how a complete reproducible project maps onto this architecture,
+from raw data sources to delivered outputs.
+
+```{dot}
+//| fig-cap: "Data science as a pipe-and-filter pipeline from sources to sinks"
+//| fig-alt: "Top: four vertical data source nodes. Center: six pipeline filter stages flowing top to bottom. Bottom: four vertical data sink nodes. Dashed feedback arcs show validation failures and model iteration."
+//| fig-width: 8
+
+digraph pipe_filter {
+  rankdir = LR
+  nodesep = 0.3
+  ranksep = 0.45
+  node [shape=box style=filled fontname="sans-serif" fontsize=13
+        margin="0.22,0.16" width=0.1 height=0.1]
+  edge [fontname="sans-serif" fontsize=11]
+
+  // ── Source column (forced same rank) ──────────────────────────────
+  { rank=same
+    SRC [label="Data\nsources" shape=plaintext style=plain
+         fontsize=13 fontcolor="#0369a1"]
+    A1 [label="Public API\n(curl · httr2)"   fillcolor="#e0f2fe" color="#0369a1"]
+    A2 [label="Database\n(SQL · DuckDB)"     fillcolor="#e0f2fe" color="#0369a1"]
+    A3 [label="Flat files\n(CSV · Parquet)"  fillcolor="#e0f2fe" color="#0369a1"]
+    A4 [label="Instrument\n(binary · HDF5)"  fillcolor="#e0f2fe" color="#0369a1"]
+    SRC -> A1 -> A2 -> A3 -> A4 [style=invis]
+  }
+
+  // ── Pipeline chain ─────────────────────────────────────────────────
+  P1 [label="Ingest\nbash · Perl · curl"               fillcolor="#dbeafe" color="#1d4ed8"]
+  P2 [label="Validate\npointblank · pytest"             fillcolor="#fef9c3" color="#92400e"]
+  P3 [label="Tidy & transform\ntidyr · dplyr · pandas"  fillcolor="#d1fae5" color="#065f46"]
+  P4 [label="Explore\nggplot2 · seaborn"                fillcolor="#d1fae5" color="#065f46"]
+  P5 [label="Model\ntidymodels · sklearn · Stan"         fillcolor="#ede9fe" color="#5b21b6"]
+  P6 [label="Communicate\nQuarto · knitr"                fillcolor="#fce7f3" color="#9d174d"]
+
+  // ── Sink column (forced same rank) ────────────────────────────────
+  { rank=same
+    SNK [label="Deliver-\nables" shape=plaintext style=plain
+         fontsize=13 fontcolor="#15803d"]
+    B1 [label="Static report\n(HTML · PDF)"            fillcolor="#dcfce7" color="#15803d"]
+    B2 [label="Dashboard\n(Shiny · Observable)"         fillcolor="#dcfce7" color="#15803d"]
+    B3 [label="Data app\n(Plumber · FastAPI)"           fillcolor="#dcfce7" color="#15803d"]
+    B4 [label="Paper\n(journal · preprint)"             fillcolor="#dcfce7" color="#15803d"]
+    SNK -> B1 -> B2 -> B3 -> B4 [style=invis]
+  }
+
+  // ── Source → pipeline ─────────────────────────────────────────────
+  A1 -> P1
+  A2 -> P1
+  A3 -> P1
+  A4 -> P1
+
+  // ── Pipeline chain ─────────────────────────────────────────────────
+  P1 -> P2 -> P3 -> P4 -> P5 -> P6
+
+  // ── Pipeline → sinks ───────────────────────────────────────────────
+  P6 -> B1
+  P6 -> B2
+  P6 -> B3
+  P6 -> B4
+
+  // ── Feedback arcs ──────────────────────────────────────────────────
+  P2 -> A2 [style=dashed color="#dc2626"
+            label="fail → rescrub" fontcolor="#dc2626"]
+  P5 -> P3 [style=dashed color="#6b7280" label="iterate"]
+}
+```
+
+**Key properties of a well-designed pipeline:**
+
+- **Documented** — every filter has a clear contract: what it reads, what it
+  writes, what transformations it applies. Encoded in comments, a `README`,
+  or a `Makefile` / `Snakemake` rule.
+- **Versioned** — inputs, code, and outputs are all under version control or
+  content-addressed storage.
+- **Testable** — each filter can be run in isolation with known inputs and
+  outputs checked against expectations (`pointblank`, `testthat`, `pytest`).
+- **Reproducible** — given the same inputs and environment (pinned via `renv`,
+  `uv`, or a container), the pipeline produces bit-identical outputs
+  [@sandve2013; @wilson2017].
+
+In Shannon's terms, each pipe is a *channel*, each filter is an
+*encoder/decoder*, and the Validate stage is a *noise filter* — it detects
+and rejects corrupted signals before they propagate downstream.
+
+::: {.callout-note}
+### Discussion questions
+
+1. Map the Baby Names project onto the source → filter → sink diagram.
+   Which stage is the most fragile? Why?
+2. What is the "noise" in a data science pipeline? Give two concrete
+   examples of how noise enters a real pipeline.
+3. A Snakemake or Make rule specifies inputs, outputs, and a shell command.
+   How does this map onto the pipe-and-filter definition of a *filter*?
+4. @donoho2010 argues that a published result should be reproducible by
+   a stranger with access only to the paper and a public repository. Which
+   stages of the pipeline diagram are typically *not* included in a
+   published repository, and why?
+:::
+
+---
+
+## Baby Names pipeline — linear view
+
+The DSC 011 Baby Names project is a complete OSEMN pipeline. The diagram
+below maps each script to its OSEMN stage and each data directory to its
+role in the pipeline.
+
+**Key design point:** Scrub is itself a three-step sub-pipeline — a common
+pattern in real data engineering. One OSEMN stage, multiple transformation
+steps, three named intermediate representations. The directory names
+`raw → processed → clean` encode those representations explicitly.
+
+```{mermaid}
+%%| fig-cap: "Baby Names project — linear OSEMN pipeline from SSA source to rendered deliverables"
+%%| fig-alt: "Top-down flow through five OSEMN stages. Obtain feeds data/raw. Scrub runs html2text to data/processed then UNIX and Perl to data/clean. Explore runs R scripts 03a through 03d. Model and iNterpret: Analysis_Report.qmd and notebooks/Exploratory_Analysis.qmd render to figures and output."
+
+flowchart TD
+  SSA["ssa.gov/oact/babynames
+  HTML tables"]
+
+  subgraph OB ["OBTAIN — 00-setup.sh · 01-obtain.sh"]
+    RAW["data/raw/
+    .txt · .html  (as downloaded)"]
+  end
+
+  subgraph SC ["SCRUB — 02-scrub.sh  (three-step sub-pipeline)"]
+    direction TB
+    S1["html2text
+    uv run Python one-liner"]
+    PROC["data/processed/
+    plain text  (HTML stripped)"]
+    S2["UNIX utils + Perl one-liners
+    cut · sed · awk · perl -ne"]
+    CLEAN["data/clean/
+    .csv files  (structured, named cols)"]
+    S1 --> PROC --> S2 --> CLEAN
+  end
+
+  subgraph EX ["EXPLORE — 03-explore.sh · 03-explore.R · 03a–03d"]
+    direction TB
+    IMP["03a-import-data.R
+    readr · here::here()"]
+    TIDY["03b-tidy-data.R
+    tidyr · dplyr · lubridate"]
+    SUMM["03c-compute-summaries.R
+    group_by · summarise · table()"]
+    VAL["03d-validate-data.R
+    pointblank · assertions"]
+    EDA["03-explore.R
+    ggplot2 · skimr · summary()"]
+    IMP --> TIDY --> SUMM --> VAL --> EDA
+  end
+
+  subgraph MN ["MODEL + iNTERPRET — Analysis_Report.qmd · notebooks/Exploratory_Analysis.qmd"]
+    direction TB
+    AR["Analysis_Report.qmd
+    wrangling · modelling · inference"]
+    EA["notebooks/Exploratory_Analysis.qmd
+    exploratory application notebook"]
+    REND["figures/ · output/
+    rendered HTML · plots · tables"]
+    AR & EA --> REND
+  end
+
+  SSA   --> OB
+  OB    --> SC
+  SC    --> EX
+  EX    --> MN
+
+  style OB    fill:#dbeafe,stroke:#3b82f6
+  style SC    fill:#fef9c3,stroke:#ca8a04
+  style EX    fill:#d1fae5,stroke:#059669
+  style MN    fill:#fce7f3,stroke:#db2777
+```
+
+::: {.callout-note}
+### Scrub as a sub-pipeline
+
+Scrub is not a single step — it is itself a three-stage mini-pipeline:
+
+1. `html2text` (Python via `uv`) converts SSA HTML → plain text →
+   `data/processed/`
+2. UNIX text utilities (`cut`, `sed`, `awk`) begin restructuring
+3. Perl one-liners inside `02-scrub.sh` produce structured CSV →
+   `data/clean/`
+
+This is entirely consistent with @mason2010: Scrub is everything between
+"data as you got it" and "data your analysis tools can consume." The
+directory names `raw → processed → clean` encode intermediate
+representations explicitly — good data engineering practice [@wilson2017].
+:::
+
+---
+
+## Baby Names pipeline — repo structural view
+
+The same pipeline organised around the **actual files and directories** in
+the project repo. Nodes are files or directories; solid edges show data
+flow; dashed edges show environment constraints.
+
+```{dot}
+//| fig-cap: "Baby Names repo — structural diagram showing files, directories, and data flow"
+//| fig-alt: "Top-down repository flow. Gray environment nodes at top. Blue obtain nodes feed yellow scrub nodes. Yellow scrub feeds green explore R scripts. Green scripts feed pink QMDs. Purple output nodes at bottom. Dashed gray edges show environment pins."
+//| fig-width: 7
+//| fig-height: 10
+
+digraph babynames_struct {
+  rankdir = TB
+  node [shape=box style=filled fontname="sans-serif" fontsize=12
+        width=2.6 height=0.56 fixedsize=true]
+  edge [fontname="sans-serif" fontsize=11]
+
+  { rank=same
+    SETUP [label="00-setup.sh\n(env · dirs · deps)"
+           fillcolor="#e2e8f0" color="#64748b"]
+    RENV  [label="renv.lock\n(R environment pin)"
+           fillcolor="#e2e8f0" color="#64748b"]
+    UV    [label="uv.lock / pyproject.toml\n(Python env pin)"
+           fillcolor="#e2e8f0" color="#64748b"]
+  }
+
+  SSA [label="ssa.gov/oact/babynames\n(HTML tables)"
+       fillcolor="#e0f2fe" color="#0369a1" width=3.0]
+
+  { rank=same
+    OBT [label="01-obtain.sh\n(curl · wget)"
+         fillcolor="#dbeafe" color="#1d4ed8"]
+    RAW [label="data/raw/\n.txt · .html"
+         fillcolor="#dbeafe" color="#1d4ed8"]
+  }
+
+  { rank=same
+    SCR  [label="02-scrub.sh\n(html2text · awk · perl)"
+          fillcolor="#fef9c3" color="#92400e"]
+    PROC [label="data/processed/\nplain text"
+          fillcolor="#fef9c3" color="#92400e"]
+    CLN  [label="data/clean/\n.csv files"
+          fillcolor="#fef9c3" color="#92400e"]
+  }
+
+  { rank=same
+    EDAS [label="03-explore.sh\n(shell EDA)"
+          fillcolor="#d1fae5" color="#065f46"]
+  }
+
+  { rank=same
+    IMP  [label="03a-import-data.R\nreadr · here::here()"
+          fillcolor="#d1fae5" color="#065f46"]
+    TIDY [label="03b-tidy-data.R\ntidyr · dplyr · lubridate"
+          fillcolor="#d1fae5" color="#065f46"]
+  }
+  { rank=same
+    SUMM [label="03c-compute-summaries.R\ngroup_by · summarise"
+          fillcolor="#d1fae5" color="#065f46"]
+    VAL  [label="03d-validate-data.R\npointblank · assertions"
+          fillcolor="#d1fae5" color="#065f46"]
+  }
+  { rank=same
+    EDA  [label="03-explore.R\nggplot2 · skimr · summary()"
+          fillcolor="#d1fae5" color="#065f46"]
+  }
+
+  { rank=same
+    AR   [label="Analysis_Report.qmd\n(root — graded deliverable)"
+          fillcolor="#fce7f3" color="#9d174d"]
+    EA   [label="notebooks/\nExploratory_Analysis.qmd"
+          fillcolor="#fce7f3" color="#9d174d"]
+  }
+
+  { rank=same
+    FIG [label="figures/\nplots · tables"
+         fillcolor="#ede9fe" color="#5b21b6"]
+    OUT [label="output/\nrendered HTML · PDF"
+         fillcolor="#ede9fe" color="#5b21b6"]
+  }
+
+  SETUP -> RENV [style=dashed color="#94a3b8"]
+  SETUP -> UV   [style=dashed color="#94a3b8"]
+  RENV  -> IMP  [style=dashed color="#94a3b8" label="pins R env"]
+  UV    -> OBT  [style=dashed color="#94a3b8" label="pins Python env"]
+
+  SSA  -> OBT  [label="HTTP GET"]
+  OBT  -> RAW
+  RAW  -> SCR
+  SCR  -> PROC [label="html2text"]
+  PROC -> SCR  [style=dashed]
+  SCR  -> CLN  [label="awk · perl"]
+
+  CLN  -> EDAS
+  CLN  -> IMP
+  IMP  -> TIDY
+  TIDY -> SUMM
+  SUMM -> VAL
+  VAL  -> EDA
+
+  SUMM -> AR
+  SUMM -> EA
+  EDA  -> AR
+  EDA  -> EA
+
+  AR   -> FIG
+  EA   -> FIG
+  AR   -> OUT
+  EA   -> OUT
+}
+```
+
+::: {.callout-note}
+### Discussion questions
+
+1. `renv.lock` and `uv.lock` are shown with dashed edges to the scripts
+   they constrain. Why are these files as important as the scripts
+   themselves for reproducibility?
+2. `data/processed/` sits between `data/raw/` and `data/clean/`. What
+   would go wrong if you skipped it and went directly from HTML to CSV?
+3. `Analysis_Report.qmd` sits at the project root while
+   `Exploratory_Analysis.qmd` lives in `notebooks/`. What does that
+   distinction encode about their purpose?
+4. The Scrub stage uses three tools: Python, UNIX utilities, and Perl.
+   Why not rewrite the whole stage in R or Python?
+:::
+
+---
+
+## The data science stack — why polyglot and why tooling first?
+
+Every data science deliverable rests on *all seven layers* below. If you only
+know layers 5 and above (stats and ML), your work is fragile: it breaks when
+the environment changes, cannot be automated, and cannot be reproduced
+[@sandve2013; @wilson2017].
+
+```{dot}
+//| fig-cap: "The data scientist's full stack, bottom to top. DSC 011 starts at layer 1."
+//| fig-alt: "Seven stacked horizontal boxes from bottom: Host OS/POSIX/kernel, Container and compute, Language runtimes, Data layer, Stats and ML, Reproducibility, Deliverables."
+//| fig-width: 7
+
+digraph stack {
+  rankdir = BT
+  node  [shape=box style=filled fontname="sans-serif" fontsize=11
+         width=5.5 height=0.55 fixedsize=true]
+  edge  [style=invis]
+
+  L1 [label="Host OS · POSIX · kernel  (bash · awk · sed · Perl · coreutils · Graphviz · Git)"
+      fillcolor="#e2e8f0" color="#94a3b8"]
+  L2 [label="Container & compute:  Docker · Apptainer/Singularity · SLURM · HPC  (bundles own OS image; shares host kernel)"
+      fillcolor="#e2e8f0" color="#94a3b8"]
+  L3 [label="Language runtimes:  R + renv  ·  Python + uv  ·  Perl  ·  Rust  ·  Julia"
+      fillcolor="#fed7aa" color="#c2410c"]
+  L4 [label="Data layer:  CSV/TSV · Arrow/Parquet · DuckDB · SQLite · Postgres · NoSQL"
+      fillcolor="#fef08a" color="#a16207"]
+  L5 [label="Stats & ML:  tidyverse · tidymodels · sklearn · PyTorch · Stan · lm/glm  (CRAN · PyPI)"
+      fillcolor="#bbf7d0" color="#15803d"]
+  L6 [label="Reproducibility:  Git · renv · uv · Make · Snakemake · Quarto · CITATION.cff"
+      fillcolor="#bfdbfe" color="#1d4ed8"]
+  L7 [label="Deliverables:  HTML report · PDF · Shiny app · Plumber API · Jupyter Book · dashboard"
+      fillcolor="#e9d5ff" color="#7e22ce"]
+
+  L1 -> L2 -> L3 -> L4 -> L5 -> L6 -> L7
+}
+```
+
+**Note on containers.** Inside Docker or Apptainer, the container carries its
+own minimal OS image (L2) but shares the *host kernel* (L1). L1 is the
+universal substrate — it cannot be containerised away.
+
+**Note on bash as a data science tool.** `bash`, `awk`, `sed`, and Perl are
+not merely sysadmin tools — they are part of the real data science toolchain.
+Fast field extraction (`cut`, `awk`), deduplication (`sort -u`), record counts
+(`wc -l`), format validation (`grep`), and streaming transformations (`sed`)
+are routine in production pipelines.
+
+**On Perl specifically.** Like `bash` and `awk`, Perl is installed by default
+on virtually every Unix-like system — macOS, every major Linux distribution,
+most embedded systems. Its behavior has been extraordinarily stable; Perl 5
+code from 1994 largely runs unchanged today. Before Python became dominant,
+Perl *was* the universal scripting language. Its regex engine defined the
+`\d`, `\w`, `\s` shorthand syntax that Python, Ruby, Java, and R subsequently
+copied.
+
+### Why polyglot?
+
+| Task | Best tool | Why |
+|------|-----------|-----|
+| Pipeline glue, data validation | `bash` + `awk` | POSIX, zero overhead, universally available |
+| Statistical modelling, visualization | R | `tidyverse`, `tidymodels`, `Bioconductor`, CRAN |
+| General data science, ML | Python | `sklearn`, `torch`, `pandas`, PyPI |
+| Portable one-liners, legacy bioinformatics | Perl | installed everywhere, stable since 1994, regex originator |
+| Performance-critical components | Rust | memory safety, speed, no runtime |
+| Numerical / scientific computing | Julia | JIT, composability, speed near C |
+
+### Why not jump straight to deliverables?
+
+Because a deliverable is the *top* of a stack, not the stack itself.
+Skipping the lower layers means results that cannot be reproduced
+[@sandve2013], pipelines that break on version changes [@bryan2019], and
+workflows that do not scale to HPC. In Shannon's terms: the deliverable is
+the *destination*, but the channel and encoder must work correctly for the
+message to arrive intact. The reproducibility crisis in computational science
+[@donoho2010; @buckheit1995] is, in Shannon's terms, a *noise problem*.
+
+::: {.callout-note}
+### Discussion questions
+
+1. Map each file in the Baby Names repo to a layer.
+2. What goes wrong if you skip the reproducibility layer (L6)?
+3. Why does DSC 011 use `bash` + R before Python? Use the stack diagram.
+4. A container bundles its own OS image but shares the host kernel. What
+   does this mean for reproducibility? Is containerized analysis *fully*
+   reproducible?
+:::
+
+---
+
+## The classic LAMP stack
+
+**LAMP** (Linux · Apache · MySQL · PHP) was the dominant web application
+stack from roughly 1998 to 2015. Understanding it is still useful because
+it established the layered architecture pattern that every modern stack
+follows, and MySQL remains widely taught and deployed [@tanenbaum2016; @widenius1996].
+
+```{dot}
+//| fig-cap: "Classic LAMP stack — Linux, Apache, MySQL, PHP"
+//| fig-alt: "Four horizontal stacked boxes from bottom: Linux OS, MySQL database, Apache web server, PHP application language. A browser client sits above."
+//| fig-width: 5.5
+
+digraph lamp {
+  rankdir = BT
+  node  [shape=box style=filled fontname="sans-serif" fontsize=11
+         width=4.2 height=0.55 fixedsize=true]
+  edge  [style=invis]
+
+  OS  [label="Linux  (OS · POSIX substrate)"
+       fillcolor="#e2e8f0" color="#94a3b8"]
+  DB  [label="MySQL  (relational database · SQL)"
+       fillcolor="#fef08a" color="#a16207"]
+  WS  [label="Apache httpd  (web / application server)"
+       fillcolor="#fed7aa" color="#c2410c"]
+  AL  [label="PHP  (server-side scripting · HTML generation)"
+       fillcolor="#bbf7d0" color="#15803d"]
+  CL  [label="Browser client  (HTTP · HTML · CSS · JS)"
+       fillcolor="#e9d5ff" color="#7e22ce"]
+
+  OS -> DB -> WS -> AL -> CL
+}
+```
+
+Each layer has a single responsibility: the OS provides the process and
+filesystem abstraction; MySQL stores and queries relational data; Apache
+routes HTTP requests and serves static files; PHP generates dynamic HTML;
+the browser renders it. This **separation of concerns** is the pattern that
+all successor stacks preserve, even as they swap out individual layers
+[@kleppmann2017].
+
+---
+
+## The modern DFMP stack for data scientists
+
+**DFMP** (Docker · FastAPI · MySQL · Python/R) is a contemporary equivalent
+of LAMP, oriented toward *data science applications* rather than traditional
+web pages [@reis2022; @kleppmann2017]. The motivating context is a successor course (DSC 111) where
+students learn to build and deploy data applications — REST APIs, dashboards,
+and interactive tools — on top of the data engineering skills from DSC 011.
+
+```{dot}
+//| fig-cap: "Modern DFMP data science application stack"
+//| fig-alt: "Seven horizontal stacked boxes from bottom: Host OS/kernel, Docker container, MySQL database, Arrow/Parquet analytical layer, Python FastAPI and R Plumber/Shiny, Pydantic schema validation, HTTP clients."
+//| fig-width: 7
+
+digraph dfmp {
+  rankdir = BT
+  node  [shape=box style=filled fontname="sans-serif" fontsize=11
+         width=5.5 height=0.55 fixedsize=true]
+  edge  [style=invis]
+
+  OS  [label="Host OS · POSIX kernel  (Linux / macOS / WSL2)"
+       fillcolor="#e2e8f0" color="#94a3b8"]
+  DC  [label="Docker  (container runtime · own OS image · compose.yml for dev parity)"
+       fillcolor="#e2e8f0" color="#64748b"]
+  DB  [label="MySQL  (relational · SQL · schemas · joins · transactions)"
+       fillcolor="#fef08a" color="#a16207"]
+  AL  [label="Arrow / Parquet / DuckDB  (analytical layer · columnar · fast aggregation)"
+       fillcolor="#fed7aa" color="#c2410c"]
+  AP  [label="Python + FastAPI  ·  R + Plumber / Shiny  (application & API layer)"
+       fillcolor="#bbf7d0" color="#15803d"]
+  SC  [label="Pydantic / validate  (operational schema · type-safe request/response contracts)"
+       fillcolor="#bfdbfe" color="#1d4ed8"]
+  CL  [label="Clients:  browser · curl · R httr2 · Python requests · downstream consumers"
+       fillcolor="#e9d5ff" color="#7e22ce"]
+
+  OS -> DC -> DB -> AL -> AP -> SC -> CL
+}
+```
+
+### LAMP vs. DFMP
+
+| Role | LAMP (1998–2015) | DFMP (2020s) | What changed |
+|------|-----------------|--------------|--------------|
+| OS substrate | Linux (bare metal / VM) | Host OS + Docker | Portability via containers |
+| Data storage | MySQL only | MySQL + Arrow/Parquet/DuckDB | Analytical layer added |
+| App server | Apache httpd | FastAPI / Plumber | Python/R replace PHP; async by default |
+| Language | PHP | Python + R (polyglot) | Typed, testable, data-native |
+| Schema enforcement | DB constraints only | DB + Pydantic (operational schema) | Schema at the API boundary |
+| Client | Browser (HTML) | Browser + API consumers + dashboards | Programmatic clients as first-class |
+
+### Three schema layers in DFMP
+
+| Layer | Where | Tool | Question answered |
+|-------|-------|------|-------------------|
+| Logical | Design (E-R diagram) | Paper / dbdiagram.io | What are the entities and relationships? |
+| Physical | Database (MySQL) | `CREATE TABLE` + constraints | What types and constraints must this data satisfy? |
+| Operational | API boundary | Pydantic model | What shape does this endpoint receive and return? |
+
+::: {.callout-note}
+### Discussion questions
+
+1. In LAMP, PHP generates HTML directly. In DFMP, FastAPI returns JSON that
+   a separate frontend renders. What does this separation buy you?
+2. Docker's `compose.yml` gives every developer an identical MySQL +
+   FastAPI environment. How does this connect to the reproducibility
+   argument in the data science stack section?
+3. DuckDB sits between MySQL and FastAPI in the DFMP stack. When would you
+   query through DuckDB rather than directly through MySQL?
+4. Pydantic enforces the operational schema at the API boundary. What
+   happens if the Pydantic model and the MySQL table schema disagree?
+5. Map a Shiny app that reads from a Parquet file onto the DFMP stack.
+   Which layers does it touch? Which does it skip?
+:::
+
+---
+
+## Turing machines, universal Turing machines, and reproducible computation
+
+A **Turing machine (TM)** is a formal model of computation: a finite set of
+states, a tape of symbols, and a transition function that reads a symbol,
+writes a symbol, moves left or right, and changes state [@sep-turing-machine;
+@stuart2013]. A TM has named
+variables (tape cells), a program (the transition function), and memory (the
+tape). It halts when it reaches an accept or reject state.
+
+A **universal Turing machine (UTM)** is a TM that takes as input the
+*description* of another TM and simulates it. This is the theoretical
+foundation of every general-purpose computer: the CPU is a UTM, the operating
+system is a UTM, and R, Python, and the shell are UTMs running on top of it.
+
+```{dot}
+//| fig-cap: "Data description → TM → UTM → output: computation as reproducible communication"
+//| fig-alt: "Four horizontal boxes left to right: data description, Turing machine program description, universal Turing machine interpreter, output deliverable. Below each box a reproducibility requirement label."
+//| fig-width: 7
+
+digraph utm {
+  rankdir = LR
+  node [shape=box style=filled fontname="sans-serif" fontsize=11
+        width=2.0 height=0.7 fixedsize=true]
+  edge [fontname="sans-serif" fontsize=10]
+
+  D  [label="Data description\n(CSV · Parquet · schema\nrenv.lock · uv.lock)"
+      fillcolor="#dbeafe" color="#1d4ed8"]
+  TM [label="TM description\n(R script · .py · bash\nQuarto · Snakemake)"
+      fillcolor="#d1fae5" color="#065f46"]
+  UT [label="UTM — interpreter\n(R 4.5 · Python 3.14\nbash · CPU + OS)"
+      fillcolor="#fef9c3" color="#92400e"]
+  O  [label="Output\n(figure · report\ndashboard · API)"
+      fillcolor="#ede9fe" color="#5b21b6"]
+
+  D  -> TM [label="input to"]
+  TM -> UT [label="executed by"]
+  UT -> O  [label="produces"]
+
+  R1 [shape=plaintext fontsize=10 label="must be complete\nand computable"   fillcolor="white" color="white"]
+  R2 [shape=plaintext fontsize=10 label="must be complete\nand computable"   fillcolor="white" color="white"]
+  R3 [shape=plaintext fontsize=10 label="must be running\nand identified"    fillcolor="white" color="white"]
+
+  D  -> R1 [style=dashed color="#94a3b8" arrowhead=none]
+  TM -> R2 [style=dashed color="#94a3b8" arrowhead=none]
+  UT -> R3 [style=dashed color="#94a3b8" arrowhead=none]
+}
+```
+
+The key pedagogical point — distinct from the halting problem or
+uncomputability — is this: **a UTM cannot run a TM whose description is
+incomplete or ambiguous.** That is what a missing `renv.lock`, an unpinned
+`FROM ubuntu:latest` in a Dockerfile, or an undocumented data transformation
+means computationally. Reproducibility is not a bureaucratic requirement — it
+is a *computability requirement* [@sep-turing-machine].
+
+In Shannon's terms: the data description and the program description are the
+*message*. The UTM is the *decoder*. The output is the *destination*. Noise
+enters whenever a description is incomplete — a missing package version, an
+undocumented filter step, a data file with no schema.
+
+::: {.callout-note}
+### Discussion questions
+
+1. R is a UTM. What is the TM it runs when you execute `source("03a-import-data.R")`?
+   What is the data description it reads?
+2. A Docker image pins the OS and interpreter. A `renv.lock` pins R packages.
+   A `uv.lock` pins Python packages. Which layer of the TM/UTM model does
+   each of these pin?
+3. The shell command `bash 02-scrub.sh` makes bash the UTM and the script the
+   TM description. What is the data description in that invocation?
+4. Why is "it works on my machine" a TM/UTM problem rather than a software
+   engineering problem?
+:::
+
+---
+
+## Von Neumann architecture — fetch-decode-execute stepper
+
+The diagram below shows what happens inside the CPU when R evaluates
+`x <- x + 1`. Each step is one phase of the **fetch-decode-execute cycle** —
+the heartbeat of every von Neumann machine [@vonneumann1945]. Use the prev/next buttons or
+click the dots to step through the cycle.
+
+Each step identifies the Shannon source, channel, and destination for that
+data movement. The memory hierarchy table at the bottom connects CPU-level
+communication bandwidth directly to the data science tools you use every day:
+why `read_parquet()` is faster than `read_csv()`, why vectorised R code
+outperforms row-wise loops, and why a remote API call dominates pipeline
+latency.
+
+```{=html}
+<style>
+.vn-step-info { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .vn-step-badge { background: #f1efe8; border: 0.5px solid #b4b2a9; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #5f5e5a; white-space: nowrap; }
+  .vn-step-title { font-size: 15px; font-weight: 500; }
+  .vn-shannon { font-size: 12px; color: #5f5e5a; margin: 0 0 12px; line-height: 1.5; border-left: 2px solid #d3d1c7; padding-left: 10px; }
+  .vn-desc { font-size: 12px; color: #3d3d3a; margin: 10px 0 0; line-height: 1.6; }
+  .vn-diagram svg { width: 100%; height: auto; display: block; }
+  .vn-controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .vn-btn { background: #fff; border: 0.5px solid #b4b2a9; border-radius: 6px; padding: 6px 16px; font-size: 13px; cursor: pointer; }
+  .vn-btn:hover { background: #f1efe8; }
+  .vn-btn:disabled { opacity: 0.35; cursor: default; }
+  .vn-dots { display: flex; gap: 6px; margin-left: auto; }
+  .vn-dot { width: 7px; height: 7px; border-radius: 50%; background: #d3d1c7; cursor: pointer; transition: background 0.2s; }
+  .vn-dot.active { background: #2c2c2a; }
+  .vn-mono { font-family: monospace; background: #f1efe8; border-radius: 4px; padding: 6px 10px; font-size: 12px; margin-bottom: 12px; }
+  .vn-mem-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 14px; }
+  .vn-mem-table th { text-align: left; padding: 4px 8px; color: #5f5e5a; font-weight: 500; border-bottom: 0.5px solid #d3d1c7; }
+  .vn-mem-table td { padding: 4px 8px; border-bottom: 0.5px solid #d3d1c7; }
+  .vn-mem-table tr.hl td { background: #f1efe8; }
+</style>
+
+<div class="vn-mono">
+  R: <strong>x &lt;- x + 1</strong>
+  &nbsp;→&nbsp;
+  LOAD R1,[addr_x] | LOAD R2,#1 | ADD Rd,R1,R2 | STORE [addr_x],Rd
+</div>
+
+<div class="vn-step-info">
+  <span class="vn-step-badge" id="vn-badge">Step 1 of 6</span>
+  <span class="vn-step-title" id="vn-title"></span>
+</div>
+<div class="vn-shannon" id="vn-shannon"></div>
+
+<div class="vn-diagram">
+<svg id="vn-svg" viewBox="0 0 680 310" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="400" height="270" rx="10" fill="#f8f8f7" stroke="#d3d1c7" stroke-width="0.5"/>
+  <text x="220" y="14" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#888780">CPU</text>
+  <rect id="b-cu" x="36" y="36" width="120" height="52" rx="6" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text id="t-cu" x="96" y="57" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="500" fill="#475569">Control unit</text>
+  <text x="96" y="72" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">fetch · decode · control</text>
+  <rect id="b-pc" x="36" y="104" width="56" height="40" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text id="t-pc" x="64" y="120" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="500" fill="#475569">PC</text>
+  <text id="tv-pc" x="64" y="134" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">0x04</text>
+  <rect id="b-ir" x="100" y="104" width="56" height="40" rx="5" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text id="t-ir-lbl" x="128" y="120" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="500" fill="#475569">IR</text>
+  <text id="tv-ir" x="128" y="134" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#64748b">—</text>
+  <rect id="b-reg" x="36" y="160" width="120" height="116" rx="6" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text x="96" y="178" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="500" fill="#475569">Registers</text>
+  <text id="tv-r1"  x="96" y="196" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">R1 = —</text>
+  <text id="tv-r2"  x="96" y="212" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">R2 = —</text>
+  <text id="tv-rd"  x="96" y="228" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">Rd = —</text>
+  <text id="tv-pc2" x="96" y="246" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">PC = 0x04</text>
+  <text id="tv-sp"  x="96" y="262" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">SP = stack top</text>
+  <rect id="b-alu" x="192" y="36" width="100" height="180" rx="6" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text id="t-alu" x="242" y="58" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="500" fill="#475569">ALU</text>
+  <text x="242" y="74" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#64748b">arithmetic ·</text>
+  <text x="242" y="86" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#64748b">logic · compare</text>
+  <text id="tv-alu" x="242" y="130" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#94a3b8">idle</text>
+  <rect id="b-cache" x="308" y="36" width="100" height="80" rx="6" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>
+  <text id="t-cache" x="358" y="56" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="500" fill="#475569">L1/L2 cache</text>
+  <text x="358" y="70" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#64748b">~1–10 ns</text>
+  <text id="tv-cache" x="358" y="86" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#94a3b8">—</text>
+  <text x="358" y="104" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#b4b2a9">(transparent)</text>
+  <text x="220" y="238" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#b4b2a9">address bus</text>
+  <text x="220" y="254" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#b4b2a9">data bus</text>
+  <text x="220" y="270" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#b4b2a9">control bus</text>
+  <rect id="b-ram" x="460" y="20" width="110" height="130" rx="6" fill="#fef9c3" stroke="#92400e" stroke-width="0.5"/>
+  <text id="t-ram" x="515" y="42" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="500" fill="#78350f">RAM / heap</text>
+  <text x="515" y="56" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#92400e">~100 ns</text>
+  <text id="tv-ram1" x="515" y="76"  text-anchor="middle" font-family="sans-serif" font-size="10" fill="#78350f">[addr_x] = 3</text>
+  <text id="tv-ram2" x="515" y="92"  text-anchor="middle" font-family="sans-serif" font-size="9"  fill="#92400e">LOAD R1,[x]</text>
+  <text id="tv-ram3" x="515" y="106" text-anchor="middle" font-family="sans-serif" font-size="9"  fill="#92400e">LOAD R2, #1</text>
+  <text id="tv-ram4" x="515" y="120" text-anchor="middle" font-family="sans-serif" font-size="9"  fill="#92400e">ADD Rd,R1,R2</text>
+  <text id="tv-ram5" x="515" y="134" text-anchor="middle" font-family="sans-serif" font-size="9"  fill="#92400e">STORE [x],Rd</text>
+  <rect id="b-stack" x="460" y="164" width="110" height="80" rx="6" fill="#bbf7d0" stroke="#065f46" stroke-width="0.5"/>
+  <text id="t-stack" x="515" y="186" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="500" fill="#065f46">Stack</text>
+  <text x="515" y="202" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#065f46">local vars · call frames</text>
+  <text id="tv-stack" x="515" y="220" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#065f46">x lives in heap</text>
+  <text x="515" y="236" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#065f46">(R global env)</text>
+  <rect id="b-stor" x="460" y="258" width="110" height="42" rx="6" fill="#ede9fe" stroke="#5b21b6" stroke-width="0.5"/>
+  <text x="515" y="277" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="500" fill="#5b21b6">Parquet / SSD</text>
+  <text x="515" y="291" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#5b21b6">~100 µs</text>
+  <line x1="422" y1="244" x2="458" y2="244" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="422" y1="256" x2="458" y2="256" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="422" y1="268" x2="458" y2="268" stroke="#d3d1c7" stroke-width="1" stroke-dasharray="3 3"/>
+  <line id="sig" x1="0" y1="0" x2="0" y2="0"
+        stroke="#ef4444" stroke-width="2"
+        marker-end="url(#arr)" opacity="0"/>
+</svg>
+</div>
+
+<div class="vn-desc" id="vn-desc"></div>
+
+<div class="vn-controls">
+  <button class="vn-btn" id="vn-prev" onclick="vnStep(-1)" disabled>← prev</button>
+  <button class="vn-btn" id="vn-next" onclick="vnStep(1)">next →</button>
+  <div class="vn-dots" id="vn-dots"></div>
+</div>
+
+<table class="vn-mem-table">
+  <thead><tr><th>Memory level</th><th>Latency</th><th>R / DSC 011 analogy</th></tr></thead>
+  <tbody>
+    <tr id="ml-reg"><td>Register</td><td>~0.3 ns</td><td>named object in current R scope</td></tr>
+    <tr id="ml-l1" ><td>L1/L2 cache</td><td>~1–10 ns</td><td>recently used data frame column</td></tr>
+    <tr id="ml-ram"><td>RAM / heap</td><td>~100 ns</td><td>large tibble, Python list, R vector</td></tr>
+    <tr id="ml-ssd"><td>Parquet / SSD</td><td>~100 µs</td><td><code>read_parquet()</code> cold read</td></tr>
+    <tr><td>Network / API</td><td>~10 ms+</td><td><code>httr2::req_perform()</code></td></tr>
+  </tbody>
+</table>
+
+<script>
+const STEPS = [
+  { title:"Fetch instruction",
+    shannon:"Shannon: PC is the source. The address bus is the channel. RAM (or cache) is the receiver. The instruction word returned on the data bus is the message. A cache miss adds ~90 ns of latency — the dominant noise source in modern CPUs.",
+    desc:"PC holds the address of the next instruction (0x04). Control unit places this address on the address bus. Cache is checked first — if the instruction is cached the latency is ~1 ns; otherwise RAM is accessed (~100 ns). Instruction loaded into the Instruction Register (IR).",
+    hl:{cu:1,pc:1,cache:1,ram:1}, ir:"LOAD R1,[x]", r1:"—",r2:"—",rd:"—",pc:"0x04",alu:"idle",cache:"checking…",ram1:"[addr_x] = 3",
+    sig:[64,104,515,76], memhl:"ml-l1" },
+  { title:"Decode instruction",
+    shannon:"Shannon: IR is the source. Control unit is the decoder. The decoded control signals are the message — sent to the ALU, registers, and buses to configure the next data movement.",
+    desc:"Control unit reads IR: opcode = LOAD, destination = R1, source address = addr_x. Generates control signals to route the data bus into R1 on the next cycle. No data has moved yet — this step is pure interpretation of the program description.",
+    hl:{cu:1,ir:1}, ir:"LOAD R1,[x]", r1:"—",r2:"—",rd:"—",pc:"0x04",alu:"idle",cache:"—",ram1:"[addr_x] = 3",
+    sig:[128,124,96,160], memhl:null },
+  { title:"Fetch operands from RAM",
+    shannon:"Shannon: RAM is the source. Data bus is the channel (64-bit wide). Register R1 is the destination. Bandwidth = bus width. Latency = ~100 ns if cache miss — this is why columnar formats like Parquet and vectorised R code matter.",
+    desc:"Address of x placed on address bus → RAM returns value 3 on data bus → written into R1. Simultaneously, immediate value 1 (encoded in the instruction itself) loaded into R2 with no memory access. Cache line is populated for future reads of x.",
+    hl:{reg:1,cache:1,ram:1}, ir:"LOAD R1,[x]", r1:"3",r2:"1",rd:"—",pc:"0x04",alu:"idle",cache:"x=3 ✓",ram1:"[addr_x] = 3",
+    sig:[460,76,156,196], memhl:"ml-ram" },
+  { title:"Execute — ALU computes R1 + R2",
+    shannon:"Shannon: registers R1 and R2 are sources. Internal ALU data paths are the channel (sub-nanosecond, on-chip). Result register Rd is the destination. This is the fastest communication step — no external bus involved.",
+    desc:"ALU receives R1=3 and R2=1 from the register file. Performs integer addition in a single clock cycle (~0.3 ns). Result 4 written to Rd. In R terms: the scalar addition is done — but x in the heap still holds the old value 3 until the write-back step.",
+    hl:{reg:1,alu:1}, ir:"ADD Rd,R1,R2", r1:"3",r2:"1",rd:"4",pc:"0x04",alu:"3+1 = 4",cache:"x=3",ram1:"[addr_x] = 3",
+    sig:[156,196,242,130], memhl:"ml-reg" },
+  { title:"Write back — store result to RAM",
+    shannon:"Shannon: register Rd is the source. Data bus is the channel. RAM address of x is the destination. This is the step that makes x <- x + 1 visible to the rest of the program. In R, copy-on-modify semantics may cause a new heap allocation instead of mutation.",
+    desc:"Value 4 from Rd placed on data bus, address of x on address bus → RAM updated: [addr_x] = 4. Cache line updated (write-back policy). In R: because x lives in the global environment (heap), this may trigger a copy if another variable also references the same object — R's copy-on-modify guarantee.",
+    hl:{reg:1,cache:1,ram:1}, ir:"STORE [x],Rd", r1:"3",r2:"1",rd:"4",pc:"0x04",alu:"done",cache:"x=4 ✓",ram1:"[addr_x] = 4",
+    sig:[156,228,460,76], memhl:"ml-ram" },
+  { title:"PC increment — cycle repeats",
+    shannon:"Shannon — the full picture: the R script is a data description input to a TM (the instruction sequence). The TM runs on a UTM (CPU + OS + R interpreter). Reproducibility requires pinning every layer: the script (renv), the interpreter version (renv.lock), the OS (Docker image). One line of R = hundreds of these cycles.",
+    desc:"PC incremented to 0x08 (next instruction). Control unit fetches the next instruction and the cycle repeats. The full x <- x + 1 required 4 memory accesses and 1 ALU operation across ~5–6 clock cycles. The R interpreter itself issued thousands of these cycles just to parse and evaluate a single assignment token.",
+    hl:{cu:1,pc:1}, ir:"—", r1:"3",r2:"1",rd:"4",pc:"0x08",alu:"idle",cache:"x=4",ram1:"[addr_x] = 4",
+    sig:[64,124,64,160], memhl:null }
+];
+
+let cur = 0;
+const BOX_IDS = ["cu","pc","ir","reg","alu","cache","ram","stack"];
+
+function applyHL(step) {
+  BOX_IDS.forEach(id => {
+    const b = document.getElementById("b-"+id);
+    const t = document.getElementById("t-"+id) || document.getElementById("t-"+id+"-lbl");
+    if (!b) return;
+    const on = step.hl && step.hl[id];
+    b.style.fill        = on ? "#fef08a" : "";
+    b.style.stroke      = on ? "#92400e" : "";
+    b.style.strokeWidth = on ? "1.5"     : "";
+    if (t) t.style.fill = on ? "#78350f" : "";
+  });
+}
+
+function applySignal(step) {
+  const sig = document.getElementById("sig");
+  if (!step.sig) { sig.setAttribute("opacity","0"); return; }
+  const [x1,y1,x2,y2] = step.sig;
+  sig.setAttribute("x1",x1); sig.setAttribute("y1",y1);
+  sig.setAttribute("x2",x2); sig.setAttribute("y2",y2);
+  sig.setAttribute("opacity","1");
+}
+
+function applyMemHL(step) {
+  ["ml-reg","ml-l1","ml-ram","ml-ssd"].forEach(id => {
+    const r = document.getElementById(id);
+    if (r) r.classList.remove("hl");
+  });
+  if (step.memhl) {
+    const r = document.getElementById(step.memhl);
+    if (r) r.classList.add("hl");
+  }
+}
+
+function render() {
+  const s = STEPS[cur];
+  document.getElementById("vn-badge").textContent   = "Step "+(cur+1)+" of "+STEPS.length;
+  document.getElementById("vn-title").textContent   = s.title;
+  document.getElementById("vn-shannon").textContent = s.shannon;
+  document.getElementById("vn-desc").textContent    = s.desc;
+  document.getElementById("tv-ir").textContent   = s.ir;
+  document.getElementById("tv-r1").textContent   = "R1 = "+s.r1;
+  document.getElementById("tv-r2").textContent   = "R2 = "+s.r2;
+  document.getElementById("tv-rd").textContent   = "Rd = "+s.rd;
+  document.getElementById("tv-pc2").textContent  = "PC = "+s.pc;
+  document.getElementById("tv-pc").textContent   = s.pc;
+  document.getElementById("tv-alu").textContent  = s.alu;
+  document.getElementById("tv-cache").textContent = s.cache;
+  document.getElementById("tv-ram1").textContent  = s.ram1;
+  applyHL(s); applySignal(s); applyMemHL(s);
+  document.getElementById("vn-prev").disabled = cur === 0;
+  document.getElementById("vn-next").disabled = cur === STEPS.length - 1;
+  document.querySelectorAll(".vn-dot").forEach((d,i) => d.classList.toggle("active", i===cur));
+}
+
+function vnStep(dir) { cur = Math.max(0, Math.min(STEPS.length-1, cur+dir)); render(); }
+
+const dotsEl = document.getElementById("vn-dots");
+STEPS.forEach((_,i) => {
+  const d = document.createElement("div");
+  d.className = "vn-dot"+(i===0?" active":"");
+  d.onclick = () => { cur=i; render(); };
+  dotsEl.appendChild(d);
+});
+
+render();
+</script>
+```
+
+::: {.callout-note}
+### Discussion questions
+
+1. The Decode step moves no data — it only interprets the instruction in IR
+   and generates control signals. In Shannon's terms, what is the *message*
+   in this step? Who is the *receiver*?
+2. R uses copy-on-modify semantics — if `y <- x` exists, R may allocate a
+   new heap object rather than mutating `[addr_x]` in place. Why is this
+   relevant to the von Neumann write-back step?
+3. The memory hierarchy table shows a Parquet cold read at ~100 µs and a
+   register access at ~0.3 ns — a factor of ~300,000. How does this explain
+   the performance difference between `read_parquet()` and
+   `httr2::req_perform()`?
+4. "One line of R = hundreds of fetch-decode-execute cycles." What does this
+   tell you about the relationship between R and the von Neumann machine it
+   runs on? How does this connect to the TM/UTM section?
+5. A Docker image pins the OS and interpreter. A `renv.lock` pins R packages.
+   A `uv.lock` pins Python packages. Which layer of the machine does each pin,
+   and why does pinning all three matter for reproducibility?
+:::
+
+---
+
+## Finite state diagrams and regular expressions
+
+A **finite state machine (FSM)** is a directed graph whose nodes are *states*
+and whose edges are *transitions* labelled with input characters or character
+classes. A string is *accepted* if there exists a path from the start state
+to an accept state that consumes every character in the string.
+
+FSMs are the recognisers for **regular languages** — Type 3 in the Chomsky
+hierarchy [@hopcroft2006; @chomsky1956]. Every regex pattern compiles to an
+FSM at runtime [@stuart2013].
+
+Node colors throughout: **gray** = start state · **teal** = intermediate ·
+**purple** = accept state (double ring).
+
+### Simplified email pattern
+
+The FSM below recognises `\w+@\w+\.\w{2,}` — one or more word characters,
+an `@`, one or more word characters, a literal dot, and a TLD of at least
+two characters.
+
+```{dot}
+//| fig-cap: "FSM for `\\w+@\\w+\\.\\w{2,}` (simplified email pattern)"
+//| fig-alt: "Five-state FSM. S0 gray start, S1-S3 teal intermediate with self-loops on word chars, S4 purple double-circle accept."
+
+digraph email_fsm {
+  rankdir = LR
+  node [shape=circle style=filled fontname="sans-serif" fontsize=12 margin=0.2]
+  edge [fontname="sans-serif" fontsize=11]
+  qi [shape=none label="" width=0 style=invis]
+  S0 [label="S0" fillcolor="#e2e8f0" color="#64748b"]
+  S1 [label="S1" fillcolor="#99f6e4" color="#0f766e"]
+  S2 [label="S2" fillcolor="#99f6e4" color="#0f766e"]
+  S3 [label="S3" fillcolor="#99f6e4" color="#0f766e"]
+  S4 [label="S4" shape=doublecircle fillcolor="#e9d5ff" color="#7e22ce"]
+  qi -> S0
+  S0 -> S1 [label="\\w"]
+  S1 -> S1 [label="\\w"]
+  S1 -> S2 [label="@"]
+  S2 -> S3 [label="\\w"]
+  S3 -> S3 [label="\\w"]
+  S3 -> S4 [label="\\."]
+  S4 -> S4 [label="\\w"]
+}
+```
+
+### Shell globs as FSMs
+
+Shell **globs** are a strict subset of regular languages with only three
+special characters:
+
+| Glob | Meaning | FSM equivalent |
+|------|---------|----------------|
+| `*`  | zero or more non-`/` characters | self-loop on `[^/]` |
+| `?`  | exactly one non-`/` character | single unlabelled transition |
+| `[…]` | one character from the set | transition with multiple labels |
+
+#### `names*.html`
+
+```{dot}
+//| fig-cap: "FSM for the shell glob `names*.html`"
+//| fig-alt: "Eleven-state FSM. G0-G4 consume the literal prefix names. G5 self-loops on any non-slash for the star. G6-G10 consume .html."
+
+digraph glob1 {
+  rankdir = LR
+  node [shape=circle style=filled fontname="sans-serif" fontsize=11 margin=0.18]
+  edge [fontname="sans-serif" fontsize=10]
+  qi  [shape=none label="" width=0 style=invis]
+  G0  [label="G0"  fillcolor="#e2e8f0" color="#64748b"]
+  G1  [label="G1"  fillcolor="#99f6e4" color="#0f766e"]
+  G2  [label="G2"  fillcolor="#99f6e4" color="#0f766e"]
+  G3  [label="G3"  fillcolor="#99f6e4" color="#0f766e"]
+  G4  [label="G4"  fillcolor="#99f6e4" color="#0f766e"]
+  G5  [label="G5"  fillcolor="#99f6e4" color="#0f766e"]
+  G6  [label="G6"  fillcolor="#99f6e4" color="#0f766e"]
+  G7  [label="G7"  fillcolor="#99f6e4" color="#0f766e"]
+  G8  [label="G8"  fillcolor="#99f6e4" color="#0f766e"]
+  G9  [label="G9"  fillcolor="#99f6e4" color="#0f766e"]
+  G10 [label="G10" shape=doublecircle fillcolor="#e9d5ff" color="#7e22ce"]
+  qi  -> G0
+  G0  -> G1  [label="n"]
+  G1  -> G2  [label="a"]
+  G2  -> G3  [label="m"]
+  G3  -> G4  [label="e"]
+  G4  -> G5  [label="s"]
+  G5  -> G5  [label="[^/]"]
+  G5  -> G6  [label="."]
+  G6  -> G7  [label="h"]
+  G7  -> G8  [label="t"]
+  G8  -> G9  [label="m"]
+  G9  -> G10 [label="l"]
+}
+```
+
+#### `names??[01]0s.txt`
+
+`??` = exactly two arbitrary characters; `[01]` = one character that is `0`
+or `1`. The bracket expression becomes a transition with two labels.
+
+```{dot}
+//| fig-cap: "FSM for the shell glob `names??[01]0s.txt`"
+//| fig-alt: "Fourteen-state FSM. H0-H4 consume names, H5-H6 each consume one arbitrary char, H7 branches on 0 or 1, then literal 0 s . t x t lead to accept state H13."
+
+digraph glob2 {
+  rankdir = LR
+  node [shape=circle style=filled fontname="sans-serif" fontsize=11 margin=0.18]
+  edge [fontname="sans-serif" fontsize=10]
+  qi  [shape=none label="" width=0 style=invis]
+  H0  [label="H0"  fillcolor="#e2e8f0" color="#64748b"]
+  H1  [label="H1"  fillcolor="#99f6e4" color="#0f766e"]
+  H2  [label="H2"  fillcolor="#99f6e4" color="#0f766e"]
+  H3  [label="H3"  fillcolor="#99f6e4" color="#0f766e"]
+  H4  [label="H4"  fillcolor="#99f6e4" color="#0f766e"]
+  H5  [label="H5"  fillcolor="#99f6e4" color="#0f766e"]
+  H6  [label="H6"  fillcolor="#99f6e4" color="#0f766e"]
+  H7  [label="H7"  fillcolor="#99f6e4" color="#0f766e"]
+  H8  [label="H8"  fillcolor="#99f6e4" color="#0f766e"]
+  H9  [label="H9"  fillcolor="#99f6e4" color="#0f766e"]
+  H10 [label="H10" fillcolor="#99f6e4" color="#0f766e"]
+  H11 [label="H11" fillcolor="#99f6e4" color="#0f766e"]
+  H12 [label="H12" fillcolor="#99f6e4" color="#0f766e"]
+  H13 [label="H13" shape=doublecircle fillcolor="#e9d5ff" color="#7e22ce"]
+  qi  -> H0
+  H0  -> H1  [label="n"]
+  H1  -> H2  [label="a"]
+  H2  -> H3  [label="m"]
+  H3  -> H4  [label="e"]
+  H4  -> H5  [label="s"]
+  H5  -> H6  [label="[^/]"]
+  H6  -> H7  [label="[^/]"]
+  H7  -> H8  [label="0|1"]
+  H8  -> H9  [label="0"]
+  H9  -> H10 [label="s"]
+  H10 -> H11 [label="."]
+  H11 -> H12 [label="t"]
+  H12 -> H13 [label="xt"]
+}
+```
+
+### A real-world regex: pipe-delimited table rows
+
+The Perl-style pattern `^\s*\d+\s+\|\s+\w+\s+\|` matches lines like those
+produced by `column -t` or a markdown table.
+
+```{dot}
+//| fig-cap: "FSM for `^\\s*\\d+\\s+\\|\\s+\\w+\\s+\\|`"
+//| fig-alt: "Eight-state FSM. R0 start with optional whitespace self-loop, R1-R6 intermediate, R7 purple accept on closing pipe."
+
+digraph pipe_fsm {
+  rankdir = LR
+  node [shape=circle style=filled fontname="sans-serif" fontsize=11 margin=0.2]
+  edge [fontname="sans-serif" fontsize=10]
+  qi [shape=none label="" width=0 style=invis]
+  R0 [label="R0" fillcolor="#e2e8f0" color="#64748b"]
+  R1 [label="R1" fillcolor="#99f6e4" color="#0f766e"]
+  R2 [label="R2" fillcolor="#99f6e4" color="#0f766e"]
+  R3 [label="R3" fillcolor="#99f6e4" color="#0f766e"]
+  R4 [label="R4" fillcolor="#99f6e4" color="#0f766e"]
+  R5 [label="R5" fillcolor="#99f6e4" color="#0f766e"]
+  R6 [label="R6" fillcolor="#99f6e4" color="#0f766e"]
+  R7 [label="R7" shape=doublecircle fillcolor="#e9d5ff" color="#7e22ce"]
+  qi -> R0
+  R0 -> R0 [label="\\s"]
+  R0 -> R1 [label="\\d"]
+  R1 -> R1 [label="\\d"]
+  R1 -> R2 [label="\\s"]
+  R2 -> R2 [label="\\s"]
+  R2 -> R3 [label="\\|"]
+  R3 -> R4 [label="\\s"]
+  R4 -> R4 [label="\\s"]
+  R4 -> R5 [label="\\w"]
+  R5 -> R5 [label="\\w"]
+  R5 -> R6 [label="\\s"]
+  R6 -> R6 [label="\\s"]
+  R6 -> R7 [label="\\|"]
+}
+```
+
+**Portability note — `\d`, `\w`, `\s` are Perl/PCRE extensions.** POSIX
+`grep` (BRE/ERE) does not understand them.
+
+```bash
+# Perl/PCRE — GNU grep only
+grep -P '^\s*\d+\s+\|\s+\w+\s+\|' file.txt
+
+# POSIX ERE — portable across macOS, Linux, BSD
+grep -E '^[[:space:]]*[0-9]+[[:space:]]+\|[[:space:]]+[A-Za-z0-9_]+[[:space:]]+\|' file.txt
+
+# sed: print matching lines — POSIX ERE
+sed -En '/^[[:space:]]*[0-9]+[[:space:]]+\|[[:space:]]+[A-Za-z0-9_]+[[:space:]]+\|/p' file.txt
+
+# sed: most portable BRE
+sed -n '/^[[:space:]]*[0-9][0-9]*[[:space:]][[:space:]]*|[[:space:]][[:space:]]*[A-Za-z0-9_][A-Za-z0-9_]*[[:space:]][[:space:]]*|/p' file.txt
+```
+
+::: {.callout-note}
+### Discussion questions
+
+1. What strings does the email FSM accept? Try `user@host.io`,
+   `@host.com`, `user@.com`.
+2. **Dead/trap states.** Making rejection *explicit* means adding a dead
+   state $S_d$ with a self-loop on every symbol not covered by existing
+   transitions, and no path to acceptance. How would you add $S_d$ to the
+   email FSM?
+3. In the glob FSMs, the `*` self-loop is on `[^/]` rather than `.` (any
+   character). Why does the shell exclude `/` from glob wildcards?
+4. The pipe-row regex uses `\s+` (one-or-more) between the digit run and
+   the pipe. What does that require about the input?
+5. Why does POSIX ERE require `[0-9]` instead of `\d`? What does this tell
+   you about the relationship between Perl and POSIX standards?
+:::
+
+---
+
+## Perl one-liners, `awk`, and `sed` equivalents
+
+<!-- TODO: table of common data-wrangling one-liners showing the same
+     operation expressed in Perl, awk, and sed side by side.
+     Suggested operations to cover:
+       - print lines matching a pattern
+       - print specific field(s) from delimited input
+       - substitute/replace a pattern
+       - count lines / records
+       - sum a numeric column
+       - print lines between two patterns
+       - remove duplicate lines
+       - print first N / last N lines
+     Ask Dave to confirm the operation list before generating. -->
+
+---
+
+## References
+
+::: {#refs}
+:::
