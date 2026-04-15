@@ -112,7 +112,7 @@ echo "=== Render Guard ==="
 echo ""
 
 # ── 1. Working directory ──────────────────────────────────────────────────────
-EXPECTED="$HOME/DSC-011-Sp26/DSC-011-S26_Lecture31_Demo_UNIX_Text_Utilities_II"
+EXPECTED="$HOME/DSC-011-Sp26/DSC-011-S26_Lecture32_Demo_Why_DSC_011"
 ACTUAL=$(pwd)
 if [[ "$ACTUAL" == "$EXPECTED" ]]; then
     echo "✓ Working directory: $ACTUAL"
@@ -184,7 +184,7 @@ eval "$MY_CODE" |
   check_bash --code "$MY_CODE"   \
              --requires grep     \
              --requires-flag -i  \
-             "544a26a357cb29a63612d11edfd13307ba5f049455007ed538c0b6295e9661e8"
+             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 ```
 
 ## `cut -c`: Print characters of all lines from 5-15 and 25 in the text file `data/processed/names2000s.txt` containing data on top baby names of the 2000s.
@@ -195,7 +195,7 @@ eval "$MY_CODE" |
   check_bash --code "$MY_CODE"   \
              --requires cut      \
              --requires-flag -c  \
-             "62f4e4064bc52b0037f9a505600232214a5ab691cb3bdf3d26a87916f16f83ab"
+             "5abe1082aa727d5126e5711ae24c0eb995d64e00cec01edd004af962d84b1058"
 
 ```
 
@@ -207,7 +207,7 @@ eval "$MY_CODE" |
   check_bash --code "$MY_CODE"   \
              --requires cut      \
              --requires-flag -f  \
-             --requires-flag -d  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+             --requires-flag -d  "0f45b153af1adee338642f3dbe01f88596e5afca9338a15c3e6fbbe7a676644d"
 ```
 
 
@@ -217,7 +217,7 @@ Write a shell-glob to exactly match the files `data/processed/names1900s.txt`,`d
 
 ```{bash glob, error=TRUE}
 
-MY_CODE=''
+MY_CODE='ls -1 data/processed/names??[01]0s.txt'
 eval "$MY_CODE" | 
   check_bash --code "$MY_CODE"   \
              --requires ls      \
@@ -285,39 +285,20 @@ eval "$MY_CODE" |
 
 ```
 
-## Interactive Data Science in the UNIX Shell
 
-Use `w3m` to interactively convert all of the raw HTML files with a shell glob, select datalines with `grep` and then use `tr`, `cut`, `sort` and `uniq` to answer: How many unique boys and girls names over all decades appear in the data? 
+## Run your Compiled "Hello World" C-Program in Quarto
 
-```{bash count-unique-names, error=TRUE}
-MY_CODE=''
+Which unique girls names had the same rank as "Michael" in any decade?
+
+```{bash hello, error=TRUE}
+MY_CODE='./hello'
 eval "$MY_CODE" | 
   check_bash --code "$MY_CODE"   \
-             --requires w3m      \
-             --requires grep     \
-             --requires tr       \
-             --requires tr       \
-             --requires tr       \
-             --requires tr       \
-             --requires cut       \
-             --requires sort       \
-             --requires uniq       \
-             --requires wc       \
-             "9f150d56c8111d8236a69a2cfa52cc546964375087648bfb46cf2d5eb8625ec8"
+             "033cbc523aee3d9007bee8985fbd9994eeaa39c0da1ebd198b336ef54843495b"
 
 ```
 
-2. In your terminal, build-out test and run each successive step in the pipeline from Jeroen Jannsons *Data Science at the Command Line* demonstrated in lecture and shown in the lecture slides, that streams the text of *Alice's Adventures in Wonderland*, converts all words to lower-case, matches and prints every word on a new line,  sorts the words ASCIIbetically (so duplicate lines are findable by `uniq`), counts the frequency of each word, sorts the words inversely by their frequency and prints the top 10 words
 
-
-. 
-
-```{bash coutnt-all-names, error=TRUE}
-code=$()
-check_bash "$code" "daae24db8bee2aaf3c4f0422311d887d1221aef0bd11b0068fb4a977d8381b0a"
-
-
-```
 
 ---
 
